@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nurtidev/rest-api-template/internal/config"
@@ -13,20 +14,23 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}))
-
-	if err := run(logger); err != nil {
+	if err := run(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(logger *slog.Logger) error {
-	cfg, err := config.Init("./")
+func run() error {
+	confPath := flag.String("config file path", "./configs/", "Path to configuration file")
+	flag.Parse()
+
+	cfg, err := config.Init(*confPath)
 	if err != nil {
 		return err
 	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // todo: прокинуть с config file
+	}))
 
 	db, err := postgres.New(fmt.Sprintf("%s%s", cfg.Postgres.Host, cfg.Postgres.Port))
 	if err != nil {
