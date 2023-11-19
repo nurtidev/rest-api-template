@@ -1,0 +1,6 @@
+# workspace
+.idea
+.vscode
+
+# configs
+config.yaml
