@@ -8,6 +8,7 @@ import (
 	"github.com/nurtidev/rest-api-template/internal/handler"
 	"github.com/nurtidev/rest-api-template/internal/repository/postgres"
 	"github.com/nurtidev/rest-api-template/internal/service"
+	"github.com/pkg/errors"
 	"log"
 	"log/slog"
 	"os"
@@ -25,30 +26,31 @@ func run() error {
 
 	cfg, err := config.Init(*confPath)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "init config")
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug, // todo: прокинуть с config file
 	}))
 
-	db, err := postgres.New(fmt.Sprintf("%s%s", cfg.Postgres.Host, cfg.Postgres.Port))
+	dsn := fmt.Sprintf("%s:%s@%s:%s/%s?sslmode=disable", cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.Database)
+	db, err := postgres.New(dsn, logger)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "init db")
 	}
 
 	svc, err := service.New(db, logger)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "init service")
 	}
 
 	h, err := handler.New(svc, logger)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "init handler")
 	}
 
-	app := fiber.New(fiber.Config{AppName: "backend.api"})
+	app := fiber.New(fiber.Config{AppName: cfg.App.Name})
 	h.Routes(app)
 
-	return nil
+	return app.Listen(fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port))
 }

@@ -4,6 +4,15 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/nurtidev/rest-api-template/internal/service"
 	"log/slog"
+	"strings"
+	"time"
+)
+
+const (
+	defaultIdleTimeout    = time.Minute
+	defaultReadTimeout    = 5 * time.Second
+	defaultWriteTimeout   = 10 * time.Second
+	defaultShutdownPeriod = 30 * time.Second
 )
 
 type Handler struct {
@@ -16,13 +25,88 @@ func New(s service.Service, logger *slog.Logger) (Handler, error) {
 }
 
 func (h *Handler) Routes(app *fiber.App) {
+
+	app.Use(h.recoverPanic)
+
+	app.Get("health", h.health)
+
 	router := app.Group("/api/v1")
 
-	router.Get("/ping", h.Ping)
+	auth := router.Group("/auth")
+	auth.Post("/login", h.login)
+	auth.Post("/register", h.register)
+	auth.Post("/refresh", h.refresh)
+
+	protected := router.Group("/protected").Use(h.protected)
+	protected.Get("/health", h.health)
 }
 
-func (h *Handler) Ping(c *fiber.Ctx) error {
+func (h *Handler) health(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"msg": "pong",
+		"status": "ok",
+	})
+}
+
+func (h *Handler) login(c *fiber.Ctx) error {
+	type request struct {
+		email    string
+		password string
+	}
+	var req request
+	if err := c.BodyParser(&req); err != nil {
+		return err
+	}
+
+	type token struct {
+		value     string
+		expiredAt time.Time
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"msg": "user successfully login",
+		"token": &token{
+			value:     "token",
+			expiredAt: time.Now().Add(1 * time.Hour),
+		},
+	})
+}
+
+func (h *Handler) register(c *fiber.Ctx) error {
+	type request struct {
+		email    string
+		password string
+	}
+	var req request
+	if err := c.BodyParser(&req); err != nil {
+		return err
+	}
+	type token struct {
+		value     string
+		expiredAt time.Time
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"msg": "user successfully created",
+		"token": &token{
+			value:     "token",
+			expiredAt: time.Now().Add(1 * time.Hour),
+		},
+	})
+}
+
+func (h *Handler) refresh(c *fiber.Ctx) error {
+	authHeader := c.Get("Authorization")
+
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return c.Status(fiber.StatusUnauthorized).SendString("missing or malformed auth token")
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	// todo: validate token
+	if token == "" {
+		return c.Status(fiber.StatusUnauthorized).SendString("invalid or expired auth token")
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"msg":   "token successfully refreshed",
+		"token": &token,
 	})
 }

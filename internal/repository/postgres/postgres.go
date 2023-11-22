@@ -5,13 +5,15 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nurtidev/rest-api-template/internal/model"
+	"log/slog"
 	"time"
 )
 
 const defaultTimeout = 3 * time.Second
 
 type Repository struct {
-	db *sqlx.DB
+	logger *slog.Logger
+	db     *sqlx.DB
 }
 
 func (r *Repository) FindUser(ctx context.Context, id int) (*model.User, error) {
@@ -24,7 +26,7 @@ func (r *Repository) InsertUser(ctx context.Context, u *model.User) (int, error)
 	panic("implement me")
 }
 
-func New(dsn string) (*Repository, error) {
+func New(dsn string, logger *slog.Logger) (*Repository, error) {
 	db, err := sqlx.Connect("postgres", "postgres://"+dsn)
 	if err != nil {
 		return nil, err
@@ -35,5 +37,5 @@ func New(dsn string) (*Repository, error) {
 	db.SetConnMaxIdleTime(5 * time.Minute)
 	db.SetConnMaxLifetime(2 * time.Hour)
 
-	return &Repository{db: db}, nil
+	return &Repository{db: db, logger: logger}, nil
 }

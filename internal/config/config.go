@@ -4,12 +4,14 @@ import "github.com/spf13/viper"
 
 type (
 	Config struct {
+		App      App      `yaml:"app"`
 		Server   Server   `yaml:"server"`
 		Postgres Postgres `yaml:"postgres"`
 	}
 
 	App struct {
-		Name string `yaml:"name"`
+		Name    string `yaml:"name"`
+		Version string `yaml:"version"`
 	}
 
 	Server struct {

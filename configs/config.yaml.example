@@ -1,3 +1,6 @@
+app:
+  name: "backend.api"
+  version: "1.0"
 server:
   host: "localhost"
   port: "8080"
