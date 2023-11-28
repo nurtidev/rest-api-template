@@ -3,9 +3,11 @@ package handler
 import (
 	"context"
 	"fmt"
-	"github.com/bytedance/sonic"
+	swagger "github.com/arsmn/fiber-swagger/v2"
 	"github.com/gofiber/fiber/v2"
+	_ "github.com/nurtidev/rest-api-template/docs"
 	"github.com/nurtidev/rest-api-template/internal/config"
+	"github.com/nurtidev/rest-api-template/internal/model"
 	"github.com/nurtidev/rest-api-template/internal/service"
 	"log/slog"
 	"os"
@@ -33,14 +35,15 @@ func New(s service.Service, logger *slog.Logger) (Handler, error) {
 	return Handler{service: s, logger: logger, wg: sync.WaitGroup{}}, nil
 }
 
+// @title Swagger API
+// @version 2.0
+// @description This is a sample rest api template.
 func (h *Handler) ServeHTTP(cfg *config.Config) error {
 	app := fiber.New(fiber.Config{
 		ReadTimeout:  defaultReadTimeout,
 		WriteTimeout: defaultWriteTimeout,
 		IdleTimeout:  defaultIdleTimeout,
 		AppName:      cfg.App.Name,
-		JSONEncoder:  sonic.Marshal,
-		JSONDecoder:  sonic.Unmarshal,
 	})
 
 	shutdownErrChan := make(chan error)
@@ -81,6 +84,7 @@ func (h *Handler) routes(app *fiber.App) {
 	app.Use(h.recoverPanic)
 
 	app.Get("health", h.health)
+	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	router := app.Group("/api/v1")
 
@@ -93,10 +97,14 @@ func (h *Handler) routes(app *fiber.App) {
 	protected.Get("/health", h.health)
 }
 
+// Health godoc
+// @Summary Show the status of server.
+// @Description get the status of server.
+// @Produce json
+// @Success 200 {object} model.HealthResponse
+// @Router /health [get]
 func (h *Handler) health(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"status": "ok",
-	})
+	return c.Status(fiber.StatusOK).JSON(model.HealthResponse{Status: "ok"})
 }
 
 func (h *Handler) login(c *fiber.Ctx) error {
