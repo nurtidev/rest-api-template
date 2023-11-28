@@ -1,6 +1,9 @@
 app:
   name: "backend.api"
   version: "1.0"
+  env: "dev" #dev, prod
+logger:
+  level: "info" #debug, info, error, fatal
 server:
   host: "localhost"
   port: "8080"

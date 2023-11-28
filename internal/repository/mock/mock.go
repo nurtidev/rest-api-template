@@ -21,6 +21,6 @@ func (r *Repository) InsertUser(ctx context.Context, u *model.User) (int, error)
 	return 1, nil
 }
 
-func New(logger *slog.Logger) (*Repository, error) {
+func New(dsn string, logger *slog.Logger) (*Repository, error) {
 	return &Repository{logger: logger}, nil
 }

@@ -9,7 +9,13 @@ import (
 	"time"
 )
 
-const defaultTimeout = 3 * time.Second
+const (
+	defaultTimeout  = 3 * time.Second
+	maxOpenConns    = 25
+	maxIdleConns    = 25
+	connMaxIdleTime = 5 * time.Minute
+	connMaxLifetime = 2 * time.Hour
+)
 
 type Repository struct {
 	logger *slog.Logger
@@ -32,10 +38,10 @@ func New(dsn string, logger *slog.Logger) (*Repository, error) {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxIdleTime(5 * time.Minute)
-	db.SetConnMaxLifetime(2 * time.Hour)
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
+	db.SetConnMaxIdleTime(connMaxIdleTime)
+	db.SetConnMaxLifetime(connMaxLifetime)
 
 	return &Repository{db: db, logger: logger}, nil
 }

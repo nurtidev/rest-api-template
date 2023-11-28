@@ -1,10 +1,18 @@
 package handler
 
 import (
+	"context"
+	"fmt"
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v2"
+	"github.com/nurtidev/rest-api-template/internal/config"
 	"github.com/nurtidev/rest-api-template/internal/service"
 	"log/slog"
+	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 )
 
@@ -18,13 +26,57 @@ const (
 type Handler struct {
 	service service.Service
 	logger  *slog.Logger
+	wg      sync.WaitGroup
 }
 
 func New(s service.Service, logger *slog.Logger) (Handler, error) {
-	return Handler{service: s, logger: logger}, nil
+	return Handler{service: s, logger: logger, wg: sync.WaitGroup{}}, nil
 }
 
-func (h *Handler) Routes(app *fiber.App) {
+func (h *Handler) ServeHTTP(cfg *config.Config) error {
+	app := fiber.New(fiber.Config{
+		ReadTimeout:  defaultReadTimeout,
+		WriteTimeout: defaultWriteTimeout,
+		IdleTimeout:  defaultIdleTimeout,
+		AppName:      cfg.App.Name,
+		JSONEncoder:  sonic.Marshal,
+		JSONDecoder:  sonic.Unmarshal,
+	})
+
+	shutdownErrChan := make(chan error)
+
+	go func() {
+		quitChan := make(chan os.Signal, 1)
+		signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
+		<-quitChan
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownPeriod)
+		defer cancel()
+
+		shutdownErrChan <- app.ShutdownWithContext(ctx)
+	}()
+
+	h.logger.Info("starting server", slog.Group("server", "addr", cfg.Server.Host+":"+cfg.Server.Port))
+
+	h.routes(app)
+
+	err := app.Listen(fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port))
+	if err != nil {
+		return err
+	}
+
+	err = <-shutdownErrChan
+	if err != nil {
+		return err
+	}
+
+	h.logger.Info("stopped server", slog.Group("server", "addr", cfg.Server.Host+":"+cfg.Server.Port))
+
+	h.wg.Wait()
+	return nil
+}
+
+func (h *Handler) routes(app *fiber.App) {
 
 	app.Use(h.recoverPanic)
 

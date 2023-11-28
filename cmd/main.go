@@ -3,54 +3,47 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/gofiber/fiber/v2"
 	"github.com/nurtidev/rest-api-template/internal/config"
 	"github.com/nurtidev/rest-api-template/internal/handler"
-	"github.com/nurtidev/rest-api-template/internal/repository/postgres"
+	"github.com/nurtidev/rest-api-template/internal/repository/mock"
 	"github.com/nurtidev/rest-api-template/internal/service"
-	"github.com/pkg/errors"
+	"github.com/nurtidev/rest-api-template/internal/utils"
 	"log"
 	"log/slog"
 	"os"
 )
 
-func main() {
-	if err := run(); err != nil {
-		log.Fatal(err)
-	}
-}
+var confPath = flag.String("config file path", "./configs/", "Path to configuration file")
 
-func run() error {
-	confPath := flag.String("config file path", "./configs/", "Path to configuration file")
+func main() {
 	flag.Parse()
 
 	cfg, err := config.Init(*confPath)
 	if err != nil {
-		return errors.Wrap(err, "init config")
+		log.Fatalf("init config: %v", err)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // todo: прокинуть с config file
+		Level: utils.ToSlogLevel(cfg.Logger.Level),
 	}))
 
 	dsn := fmt.Sprintf("%s:%s@%s:%s/%s?sslmode=disable", cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.Database)
-	db, err := postgres.New(dsn, logger)
+	db, err := mock.New(dsn, logger)
 	if err != nil {
-		return errors.Wrap(err, "init db")
+		log.Fatalf("init db: %v", err)
 	}
 
 	svc, err := service.New(db, logger)
 	if err != nil {
-		return errors.Wrap(err, "init service")
+		log.Fatalf("init service: %v", err)
 	}
 
 	h, err := handler.New(svc, logger)
 	if err != nil {
-		return errors.Wrap(err, "init handler")
+		log.Fatalf("init handler: %v", err)
 	}
 
-	app := fiber.New(fiber.Config{AppName: cfg.App.Name})
-	h.Routes(app)
-
-	return app.Listen(fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port))
+	if err = h.ServeHTTP(cfg); err != nil {
+		log.Fatalf("serve http: %v", err)
+	}
 }

@@ -1,10 +1,13 @@
 package config
 
-import "github.com/spf13/viper"
+import (
+	"github.com/spf13/viper"
+)
 
 type (
 	Config struct {
 		App      App      `yaml:"app"`
+		Logger   Logger   `yaml:"logger"`
 		Server   Server   `yaml:"server"`
 		Postgres Postgres `yaml:"postgres"`
 	}
@@ -12,6 +15,11 @@ type (
 	App struct {
 		Name    string `yaml:"name"`
 		Version string `yaml:"version"`
+		Env     string `yaml:"env"`
+	}
+
+	Logger struct {
+		Level string `yaml:"level"`
 	}
 
 	Server struct {
