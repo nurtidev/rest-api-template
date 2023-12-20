@@ -2,11 +2,8 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/nurtidev/rest-api-template/internal/config"
-	"github.com/nurtidev/rest-api-template/internal/handler"
-	"github.com/nurtidev/rest-api-template/internal/repository/mock"
-	"github.com/nurtidev/rest-api-template/internal/service"
+	"github.com/nurtidev/rest-api-template/internal/server"
 	"github.com/nurtidev/rest-api-template/internal/utils"
 	"log"
 	"log/slog"
@@ -27,23 +24,12 @@ func main() {
 		Level: utils.ToSlogLevel(cfg.Logger.Level),
 	}))
 
-	dsn := fmt.Sprintf("%s:%s@%s:%s/%s?sslmode=disable", cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.Database)
-	db, err := mock.New(dsn, logger)
+	srv, err := server.New(cfg, logger)
 	if err != nil {
-		log.Fatalf("init db: %v", err)
+		log.Fatalf("init server: %v\n", err)
 	}
 
-	svc, err := service.New(db, logger)
-	if err != nil {
-		log.Fatalf("init service: %v", err)
-	}
-
-	h, err := handler.New(svc, logger)
-	if err != nil {
-		log.Fatalf("init handler: %v", err)
-	}
-
-	if err = h.ServeHTTP(cfg); err != nil {
-		log.Fatalf("serve http: %v", err)
+	if err = srv.StartWithGracefulShutdown(); err != nil {
+		log.Fatalf("start server: %v\n", err)
 	}
 }

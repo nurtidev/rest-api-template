@@ -7,9 +7,14 @@ import (
 type (
 	Config struct {
 		App      App      `yaml:"app"`
+		Secrets  Secrets  `yaml:"secrets"`
 		Logger   Logger   `yaml:"logger"`
 		Server   Server   `yaml:"server"`
 		Postgres Postgres `yaml:"postgres"`
+	}
+
+	Secrets struct {
+		JwtSecret string `yaml:"jwtSecret"`
 	}
 
 	App struct {
@@ -33,6 +38,7 @@ type (
 		User     string `yaml:"user"`
 		Password string `yaml:"password"`
 		Database string `yaml:"database"`
+		SslMode  string `yaml:"sslmode"`
 	}
 )
 

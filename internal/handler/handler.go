@@ -1,85 +1,28 @@
 package handler
 
 import (
-	"context"
-	"fmt"
 	swagger "github.com/arsmn/fiber-swagger/v2"
 	"github.com/gofiber/fiber/v2"
-	_ "github.com/nurtidev/rest-api-template/docs"
-	"github.com/nurtidev/rest-api-template/internal/config"
 	"github.com/nurtidev/rest-api-template/internal/model"
 	"github.com/nurtidev/rest-api-template/internal/service"
 	"log/slog"
-	"os"
-	"os/signal"
 	"strings"
-	"sync"
-	"syscall"
-	"time"
-)
-
-const (
-	defaultIdleTimeout    = time.Minute
-	defaultReadTimeout    = 5 * time.Second
-	defaultWriteTimeout   = 10 * time.Second
-	defaultShutdownPeriod = 30 * time.Second
 )
 
 type Handler struct {
 	service service.Service
 	logger  *slog.Logger
-	wg      sync.WaitGroup
 }
 
 func New(s service.Service, logger *slog.Logger) (Handler, error) {
-	return Handler{service: s, logger: logger, wg: sync.WaitGroup{}}, nil
+	return Handler{service: s, logger: logger}, nil
 }
 
 // @title Swagger API
 // @version 2.0
 // @description This is a sample rest api template.
-func (h *Handler) ServeHTTP(cfg *config.Config) error {
-	app := fiber.New(fiber.Config{
-		ReadTimeout:  defaultReadTimeout,
-		WriteTimeout: defaultWriteTimeout,
-		IdleTimeout:  defaultIdleTimeout,
-		AppName:      cfg.App.Name,
-	})
 
-	shutdownErrChan := make(chan error)
-
-	go func() {
-		quitChan := make(chan os.Signal, 1)
-		signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
-		<-quitChan
-
-		ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownPeriod)
-		defer cancel()
-
-		shutdownErrChan <- app.ShutdownWithContext(ctx)
-	}()
-
-	h.logger.Info("starting server", slog.Group("server", "addr", cfg.Server.Host+":"+cfg.Server.Port))
-
-	h.routes(app)
-
-	err := app.Listen(fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port))
-	if err != nil {
-		return err
-	}
-
-	err = <-shutdownErrChan
-	if err != nil {
-		return err
-	}
-
-	h.logger.Info("stopped server", slog.Group("server", "addr", cfg.Server.Host+":"+cfg.Server.Port))
-
-	h.wg.Wait()
-	return nil
-}
-
-func (h *Handler) routes(app *fiber.App) {
+func (h *Handler) InitializeRoutes(app *fiber.App) {
 
 	app.Use(h.recoverPanic)
 
@@ -92,13 +35,11 @@ func (h *Handler) routes(app *fiber.App) {
 	auth.Post("/login", h.login)
 	auth.Post("/register", h.register)
 	auth.Post("/refresh", h.refresh)
-
-	protected := router.Group("/protected").Use(h.protected)
-	protected.Get("/health", h.health)
+	auth.Post("/logout", h.logout)
 }
 
-// Health godoc
-// @Summary Show the status of server.
+// health show the status of server
+// @Summary show the status of server.
 // @Description get the status of server.
 // @Produce json
 // @Success 200 {object} model.HealthResponse
@@ -107,52 +48,17 @@ func (h *Handler) health(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(model.HealthResponse{Status: "ok"})
 }
 
-func (h *Handler) login(c *fiber.Ctx) error {
-	type request struct {
-		email    string
-		password string
-	}
-	var req request
-	if err := c.BodyParser(&req); err != nil {
-		return err
-	}
-
-	type token struct {
-		value     string
-		expiredAt time.Time
-	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"msg": "user successfully login",
-		"token": &token{
-			value:     "token",
-			expiredAt: time.Now().Add(1 * time.Hour),
-		},
-	})
-}
-
-func (h *Handler) register(c *fiber.Ctx) error {
-	type request struct {
-		email    string
-		password string
-	}
-	var req request
-	if err := c.BodyParser(&req); err != nil {
-		return err
-	}
-	type token struct {
-		value     string
-		expiredAt time.Time
-	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"msg": "user successfully created",
-		"token": &token{
-			value:     "token",
-			expiredAt: time.Now().Add(1 * time.Hour),
-		},
-	})
-}
-
-func (h *Handler) refresh(c *fiber.Ctx) error {
+// logout deletes the JWT token from storage.
+// @Summary delete jwt token from storage.
+// @Description delete jwt token from storage.
+// @Produce json
+// @Param Authorization header string true "Bearer [JWT token]"
+// @Success 200 {object} model.BaseResponse
+// @Failure 400 {object} model.BaseResponse
+// @Failure 401 {object} model.BaseResponse
+// @Failure 500 {object} model.BaseResponse
+// @Router /api/v1/auth/logout [post]
+func (h *Handler) logout(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 
 	if !strings.HasPrefix(authHeader, "Bearer ") {
@@ -160,13 +66,128 @@ func (h *Handler) refresh(c *fiber.Ctx) error {
 	}
 
 	token := strings.TrimPrefix(authHeader, "Bearer ")
-	// todo: validate token
-	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).SendString("invalid or expired auth token")
+
+	st, err := h.service.LogoutUser(c.UserContext(), token)
+	if err != nil {
+		return c.Status(st).JSON(model.BaseResponse{
+			Success: false,
+			Msg:     err.Error(),
+		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"msg":   "token successfully refreshed",
-		"token": &token,
+	return c.Status(fiber.StatusOK).JSON(model.BaseResponse{
+		Success: true,
+		Msg:     "user successfully logout",
+	})
+}
+
+// login authenticates a user and returns a JWT token.
+// @Summary User login
+// @Description Authenticates user credentials and returns a JWT token upon successful login.
+// @Accept json
+// @Produce json
+// @Param login body model.LoginRequest true "Login Credentials"
+// @Success 200 {object} model.LoginResponse "User successfully logged in with token returned"
+// @Failure 400 {object} model.BaseResponse "Invalid request format or content"
+// @Failure 401 {object} model.BaseResponse "Unauthorized access due to invalid credentials"
+// @Failure 500 {object} model.BaseResponse "Internal server error"
+// @Router /api/v1/auth/login [post]
+func (h *Handler) login(c *fiber.Ctx) error {
+	var req model.LoginRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"msg":     err.Error(),
+		})
+	}
+
+	token, st, err := h.service.LoginUser(c.UserContext(), &req)
+	if err != nil {
+		return c.Status(st).JSON(model.BaseResponse{
+			Success: false,
+			Msg:     err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(model.LoginResponse{
+		BaseResponse: model.BaseResponse{
+			Success: true,
+			Msg:     "user successfully login",
+		},
+		Token: token,
+	})
+}
+
+// register creates a new user account and returns a JWT token.
+// @Summary User registration
+// @Description Registers a new user with the provided details and returns a JWT token upon successful registration.
+// @Accept json
+// @Produce json
+// @Param register body model.RegisterRequest true "Registration Details"
+// @Success 200 {object} model.RegisterResponse "User successfully created with token returned"
+// @Failure 400 {object} model.BaseResponse "Invalid request format or content"
+// @Failure 500 {object} model.BaseResponse "Internal server error"
+// @Router /api/v1/auth/register [post]
+func (h *Handler) register(c *fiber.Ctx) error {
+	var req model.RegisterRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(model.BaseResponse{
+			Success: false,
+			Msg:     err.Error(),
+		})
+	}
+	token, st, err := h.service.RegisterUser(c.UserContext(), &req)
+	if err != nil {
+		return c.Status(st).JSON(model.BaseResponse{
+			Success: false,
+			Msg:     err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(model.RegisterResponse{
+		BaseResponse: model.BaseResponse{
+			Success: true,
+			Msg:     "user successfully created",
+		},
+		Token: token,
+	})
+}
+
+// refresh renews the JWT token for a user.
+// @Summary Refresh JWT token
+// @Description Validates the existing JWT token from the Authorization header and issues a new token.
+// @Produce json
+// @Param Authorization header string true "Bearer [current JWT token]"
+// @Success 200 {object} model.RefreshResponse "Token successfully refreshed"
+// @Failure 400 {object} model.BaseResponse "Missing or malformed auth token"
+// @Failure 401 {object} model.BaseResponse "Unauthorized access due to invalid or expired token"
+// @Failure 500 {object} model.BaseResponse "Internal server error"
+// @Router /api/v1/auth/refresh [post]
+func (h *Handler) refresh(c *fiber.Ctx) error {
+	authHeader := c.Get("Authorization")
+
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return c.Status(fiber.StatusUnauthorized).JSON(model.BaseResponse{
+			Success: false,
+			Msg:     "missing or malformed auth token",
+		})
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+
+	token, st, err := h.service.RefreshToken(c.UserContext(), token)
+	if err != nil {
+		return c.Status(st).JSON(model.BaseResponse{
+			Success: false,
+			Msg:     err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(model.RefreshResponse{
+		BaseResponse: model.BaseResponse{
+			Success: true,
+			Msg:     "token successfully refreshed",
+		},
+		Token: token,
 	})
 }

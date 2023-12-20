@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/nurtidev/rest-api-template/internal/model"
 	"strings"
 )
 
@@ -9,7 +10,7 @@ func (h *Handler) recoverPanic(c *fiber.Ctx) error {
 	defer func() {
 		if r := recover(); r != nil {
 			h.logger.Info("recovered from panic", r)
-			_ = c.Status(fiber.StatusInternalServerError).SendString("Internal Server Error")
+			_ = c.Status(fiber.StatusInternalServerError).SendString("internal server error")
 		}
 	}()
 
@@ -25,9 +26,12 @@ func (h *Handler) protected(c *fiber.Ctx) error {
 
 	token := strings.TrimPrefix(authHeader, "Bearer ")
 
-	// todo: validate token
-	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).SendString("invalid or expired auth token")
+	st, err := h.service.ValidateToken(c.UserContext(), token)
+	if err != nil {
+		return c.Status(st).JSON(model.BaseResponse{
+			Success: false,
+			Msg:     err.Error(),
+		})
 	}
 
 	return c.Next()

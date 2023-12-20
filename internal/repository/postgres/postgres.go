@@ -2,9 +2,10 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/nurtidev/rest-api-template/internal/model"
+	"github.com/nurtidev/rest-api-template/internal/config"
 	"log/slog"
 	"time"
 )
@@ -15,6 +16,11 @@ const (
 	maxIdleConns    = 25
 	connMaxIdleTime = 5 * time.Minute
 	connMaxLifetime = 2 * time.Hour
+
+	defaultSchema = "test_nurtilek."
+
+	usersTable  = "users"
+	tokensTable = "tokens"
 )
 
 type Repository struct {
@@ -22,18 +28,10 @@ type Repository struct {
 	db     *sqlx.DB
 }
 
-func (r *Repository) FindUser(ctx context.Context, id int) (*model.User, error) {
-	//TODO implement me
-	panic("implement me")
-}
+func New(cfg *config.Config, logger *slog.Logger) (*Repository, error) {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.Database, cfg.Postgres.SslMode)
 
-func (r *Repository) InsertUser(ctx context.Context, u *model.User) (int, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func New(dsn string, logger *slog.Logger) (*Repository, error) {
-	db, err := sqlx.Connect("postgres", "postgres://"+dsn)
+	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -44,4 +42,22 @@ func New(dsn string, logger *slog.Logger) (*Repository, error) {
 	db.SetConnMaxLifetime(connMaxLifetime)
 
 	return &Repository{db: db, logger: logger}, nil
+}
+
+func (r *Repository) Close(ctx context.Context) error {
+	dbCloseChan := make(chan error, 1)
+	go func() {
+		dbCloseChan <- r.db.Close()
+	}()
+
+	select {
+	case err := <-dbCloseChan:
+		if err != nil {
+			return err
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	return nil
 }

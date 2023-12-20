@@ -4,13 +4,193 @@
         "contact": {}
     },
     "paths": {
+        "/api/v1/auth/login": {
+            "post": {
+                "description": "Authenticates user credentials and returns a JWT token upon successful login.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "User login",
+                "parameters": [
+                    {
+                        "description": "Login Credentials",
+                        "name": "login",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User successfully logged in with token returned",
+                        "schema": {
+                            "$ref": "#/definitions/model.LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format or content",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized access due to invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/logout": {
+            "post": {
+                "description": "delete jwt token from storage.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "delete jwt token from storage.",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer [JWT token]",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/refresh": {
+            "post": {
+                "description": "Validates the existing JWT token from the Authorization header and issues a new token.",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Refresh JWT token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer [current JWT token]",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Token successfully refreshed",
+                        "schema": {
+                            "$ref": "#/definitions/model.RefreshResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing or malformed auth token",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized access due to invalid or expired token",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/register": {
+            "post": {
+                "description": "Registers a new user with the provided details and returns a JWT token upon successful registration.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "User registration",
+                "parameters": [
+                    {
+                        "description": "Registration Details",
+                        "name": "register",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User successfully created with token returned",
+                        "schema": {
+                            "$ref": "#/definitions/model.RegisterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format or content",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/model.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "get the status of server.",
                 "produces": [
                     "application/json"
                 ],
-                "summary": "Show the status of server.",
+                "summary": "show the status of server.",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -23,10 +203,91 @@
         }
     },
     "definitions": {
+        "model.BaseResponse": {
+            "type": "object",
+            "properties": {
+                "msg": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
         "model.HealthResponse": {
             "type": "object",
             "properties": {
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "msg": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.RefreshResponse": {
+            "type": "object",
+            "properties": {
+                "msg": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.RegisterRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "surname": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.RegisterResponse": {
+            "type": "object",
+            "properties": {
+                "msg": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "token": {
                     "type": "string"
                 }
             }
